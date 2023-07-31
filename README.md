@@ -173,3 +173,11 @@ The shallow models are automatically go through the grid search when running the
 |ABC	| 0.04 |	98.96 | 
 |GBC	| 0.06 |	98.44 | 
 |KNN	| 845.21 |	-21853.51 | 
+
+## Authors
+
+* **Rafael Teixeira** - [rgtzths](https://github.com/rgtzths)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
