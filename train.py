@@ -21,11 +21,13 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.model_selection import GridSearchCV
-
+import tensorflow as tf
 
 import warnings
 warnings.filterwarnings('ignore')
 os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
+
+from config import DATASETS
 
 
 model_mapping ={'LOG': LogisticRegression,
@@ -39,15 +41,22 @@ model_mapping ={'LOG': LogisticRegression,
 
 
 @timeit.exectime(5)
-def fit(cls, X, y):
-    with joblib.parallel_backend(backend='loky', n_jobs=-1):
-        cls.fit(X, y)
+def fit(cls, X, y, is_sklearn):
+    if is_sklearn:
+        with joblib.parallel_backend(backend='loky', n_jobs=-1):
+            cls.fit(X, y)
+    else:
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=0)
+        cls.fit(X, y, epochs=50, verbose=0, callbacks=[callback])
 
 
 @timeit.exectime(5)
-def predict(cls, X):
-    with joblib.parallel_backend(backend='loky', n_jobs=-1):
-        return cls.predict(X)
+def predict(cls, X, is_sklearn):
+    if is_sklearn:
+        with joblib.parallel_backend(backend='loky', n_jobs=-1):
+            return cls.predict(X)
+    else:
+        return cls.predict(X, verbose=0)
 
 
 def optimize(cls_name, parameters, cv = 5):
@@ -58,7 +67,7 @@ def optimize(cls_name, parameters, cv = 5):
     return cls
 
 
-def train_models(X_train, y_train, X_test, y_test, seed, results_folder):
+def train_models(X_train, y_train, X_test, y_test, model, seed, results_folder):
     results_file = open(results_folder/"results.md", "w")
     models = [('LOG', {'random_state':[seed], 'penalty': ['l1','l2']}),
               ('KNN', {'weights': ['uniform', 'distance'], 'n_neighbors': [3,5,7]}),
@@ -67,7 +76,8 @@ def train_models(X_train, y_train, X_test, y_test, seed, results_folder):
               ('DT',  {'random_state':[seed], 'criterion':['gini','entropy'],'max_depth':[3,5,7,9], 'max_features': ['auto', 'sqrt', 'log2']}),
               ('RF',  {'random_state':[seed], 'n_estimators':[200,300,400], 'max_features':['auto', 'sqrt', 'log2'], 'max_depth':[3,5,7,9],}),
               ('ADC', {'random_state':[seed], 'n_estimators':[200,300,400]}),
-              ('GBC', {'random_state':[seed], 'n_estimators':[200,300,400], 'max_features':['auto', 'sqrt', 'log2'], 'max_depth':[3,5,7,9]})
+              ('GBC', {'random_state':[seed], 'n_estimators':[200,300,400], 'max_features':['auto', 'sqrt', 'log2'], 'max_depth':[3,5,7,9]}),
+              ('DNN', {})
               ]
 
     print(f'| Model name | Train time | Infer time | ACC | F1  | MCC |')
@@ -75,31 +85,46 @@ def train_models(X_train, y_train, X_test, y_test, seed, results_folder):
     results_file.write(f'| Model name | Train time | Infer time | ACC | F1  | MCC |\n')
     results_file.write(f'| ---------- | ---------- | ---------- | --- | --- | --- |\n')
     for cls_name, parameters in models:
-        cls = optimize(cls_name, parameters)
-        mtt, std_tt , _ = fit(cls, X_train, y_train)
-        mti, std_ti , y_pred = predict(cls, X_test)
+        is_sklearn = cls_name in model_mapping
+        if is_sklearn:
+            cls = optimize(cls_name, parameters)
+        else:
+            cls = model
+        mtt, std_tt , _ = fit(cls, X_train, y_train, is_sklearn)
+        mti, std_ti , y_pred = predict(cls, X_test, is_sklearn)
+        y_pred = y_pred if is_sklearn else [np.argmax(y) for y in y_pred]
+
         acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, average='weighted')
         mcc = matthews_corrcoef(y_test, y_pred)
+        
         print(f'| {cls_name:<10} | {round(mtt,2):>4}±{round(std_tt,2):<5} | {round(mti,2):<4}±{round(std_tt,2):<5} | {round(acc,2):<3} | {round(f1,2):<3} | {round(mcc,2):<3} |')
+        
         results_file.write(f'| {cls_name:<10} | {round(mtt,2):>4}±{round(std_tt,2):<5} | {round(mti,2):<4}±{round(std_tt,2):<5} | {round(acc,2):<3} | {round(f1,2):<3} | {round(mcc,2):<3} |\n')
-        joblib.dump(cls, results_folder/ f'{cls_name}.joblib')
+        if is_sklearn:
+            joblib.dump(cls, results_folder/ f'{cls_name}.joblib')
+        else:
+            model.save(results_folder/f"dnn_model")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train/test the DNNs.')
-    parser.add_argument('-d', type=str, help='Dataset folder', default='dataset/processed_data/')
+    parser.add_argument("-d", help=f"Dataset name {list(DATASETS.keys())}", default="IOT_DNL")
     parser.add_argument('-s', type=int, help='Seed used for data shuffle', default=42)
     parser.add_argument('-r', type=int, help='Results folder', default='results')
     args = parser.parse_args()
 
-    dataset = pathlib.Path(args.d)
+    if args.d not in DATASETS.keys():
+        raise ValueError(f"Dataset name must be one of {list(DATASETS.keys())}")
+    
+    tf.keras.utils.set_random_seed(args.s)
+    dataset = DATASETS[args.d]()
+
     results = pathlib.Path(args.r)
+    results = results / dataset.name
     results.mkdir(parents=True, exist_ok=True)
 
+    X_train, y_train = dataset.load_training_data()
+    X_test, y_test = dataset.load_test_data()
 
-    X_train = np.loadtxt(dataset/"x_train.csv", delimiter=",", dtype=int)
-    y_train = np.loadtxt(dataset/"y_train.csv", delimiter=",", dtype=int)
-    X_test  = np.loadtxt(dataset/"x_test.csv", delimiter=",", dtype=int)
-    y_test  = np.loadtxt(dataset/"y_test.csv", delimiter=",", dtype=int)
-
-    train_models(X_train, y_train, X_test, y_test, args.s)
+    train_models(X_train, y_train, X_test, y_test, dataset.create_model(), args.s, results)
