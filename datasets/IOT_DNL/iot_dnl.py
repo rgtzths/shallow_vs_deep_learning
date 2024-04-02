@@ -32,36 +32,37 @@ class IOT_DNL(Util):
 
         x_test = pd.DataFrame(scaler.transform(x_test), columns=x_test.columns)
         
-        x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=42, shuffle=True)
-
         print(f"\nTotal samples {n_samples}")
         print(f"Shape of the train data: {x_train.shape}")
-        print(f"Shape of the validation data: {x_val.shape}")
         print(f"Shape of the test data: {x_test.shape}\n")
 
         # Save the data
         x_train.to_csv(f"{output}/X_train.csv", index=False)
-        x_val.to_csv(f"{output}/X_val.csv", index=False)
         x_test.to_csv(f"{output}/X_test.csv", index=False)
         y_train.to_csv(f"{output}/y_train.csv", index=False)
-        y_val.to_csv(f"{output}/y_val.csv", index=False)
         y_test.to_csv(f"{output}/y_test.csv", index=False)
 
 
-    #def create_model(self):
-    #    # Optimizer: Adam
-    #    # Learning rate: 0.000005
-    #    return tf.keras.models.Sequential([
-    #        # flatten layer
-    #        tf.keras.layers.Flatten(input_shape=(11,)),
-    #        # hidden layers
-    #        tf.keras.layers.Dense(64, activation='relu'),
-    #        tf.keras.layers.Dropout(0.1),
-    #        tf.keras.layers.Dense(64, activation='relu'),
-    #        tf.keras.layers.Dropout(0.1),
-    #        tf.keras.layers.Dense(64, activation='relu'),
-    #        tf.keras.layers.Dropout(0.1),
-    #        tf.keras.layers.Dense(64, activation='relu'),
-    #        # output layer
-    #        tf.keras.layers.Dense(6, activation='softmax')
-    #    ])
+    def create_model(self):
+        model =  tf.keras.models.Sequential([
+            # flatten layer
+            tf.keras.layers.Flatten(input_shape=(11,)),
+            # hidden layers
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dropout(0.1),
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dropout(0.1),
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dropout(0.1),
+            tf.keras.layers.Dense(64, activation='relu'),
+            # output layer
+            tf.keras.layers.Dense(6, activation='softmax')
+        ])
+
+        model.compile(
+                    optimizer=tf.keras.optimizers.Adam(), 
+                    loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+                    metrics=['accuracy']
+                )
+
+        return model

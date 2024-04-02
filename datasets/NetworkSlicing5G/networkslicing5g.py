@@ -41,31 +41,48 @@ class NetworkSlicing5G(Util):
         y = data[:,-1]
 
         x_train, x_test, y_train, y_test = train_test_split(x, y, random_state=42, test_size=0.2)
-
-        x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, random_state=42, test_size=0.2)
         
         print(f"\nTotal samples {df.values.shape[0]}")
         print(f"Shape of the train data: {x_train.shape}")
-        print(f"Shape of the validation data: {x_val.shape}")
         print(f"Shape of the test data: {x_test.shape}\n")
 
-        np.savetxt(f"{output}/x_train.csv", x_train, delimiter=",", fmt="%d")
-        np.savetxt(f"{output}/x_val.csv", x_val, delimiter=",", fmt="%d")
-        np.savetxt(f"{output}/x_test.csv", x_test, delimiter=",", fmt="%d")
+        np.savetxt(f"{output}/X_train.csv", x_train, delimiter=",", fmt="%d")
+        np.savetxt(f"{output}/X_test.csv", x_test, delimiter=",", fmt="%d")
         np.savetxt(f"{output}/y_train.csv", y_train, delimiter=",", fmt="%d")
-        np.savetxt(f"{output}/y_val.csv", y_val, delimiter=",", fmt="%d")
         np.savetxt(f"{output}/y_test.csv", y_test, delimiter=",", fmt="%d")
+        
+    def load_training_data(self):
+        """
+        Load the training data
+        """
+        x_train = np.loadtxt(f"datasets/{self.name}/data/X_train.csv", delimiter=",")
+        y_train = np.loadtxt(f"datasets/{self.name}/data/y_train.csv", delimiter=",")
+        return x_train, y_train
 
+    def load_test_data(self):
+        """
+        Load the test data
+        """
+        x_test = np.loadtxt(f"datasets/{self.name}/data/X_test.csv", delimiter=",")
+        y_test = np.loadtxt(f"datasets/{self.name}/data/y_test.csv", delimiter=",")
+        return x_test, y_test
 
-#    def create_model(self):
-#        return tf.keras.models.Sequential([
-#            # input layer
-#            tf.keras.layers.InputLayer(input_shape=(39,)),
-#            # hidden layers
-#            tf.keras.layers.Dense(32, activation='relu'),
-#            tf.keras.layers.Dropout(0.2),
-#            tf.keras.layers.Dense(16, activation='relu'),
-#            tf.keras.layers.Dropout(0.2),
-#            # output layer
-#            tf.keras.layers.Dense(2, activation='softmax')
-#        ])
+    def create_model(self):
+        model = tf.keras.models.Sequential([
+                # flatten layer
+                tf.keras.layers.Flatten(input_shape=(20,)),
+                # hidden layers
+                tf.keras.layers.Dense(8, activation='relu'),
+                tf.keras.layers.Dense(4, activation='relu'),
+                tf.keras.layers.Dense(3, activation='tanh'),
+                # output layer
+                tf.keras.layers.Dense(3, activation="softmax")
+            ])
+        
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(), 
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+            metrics=['accuracy']
+        )
+
+        return model

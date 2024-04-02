@@ -8,10 +8,10 @@ from datasets.NetSlice5G.netslice5g import NetSlice5G
 from datasets.NetworkSlicing5G.networkslicing5g import NetworkSlicing5G
 
 DATASETS = {
+    "NetSlice5G" : NetSlice5G,
+    "Slicing5G": Slicing5G,
+    "NetworkSlicing5G" : NetworkSlicing5G,
     "IOT_DNL": IOT_DNL,
     "UNSW": UNSW,
     "TON_IOT": TON_IOT,
-    "Slicing5G": Slicing5G,
-    "NetSlice5G" : NetSlice5G,
-    "NetworkSlicing5G" : NetworkSlicing5G
 }

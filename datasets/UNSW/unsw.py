@@ -26,31 +26,34 @@ class UNSW(Util):
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42, shuffle=True)
         x_train = pd.DataFrame(scaler.fit_transform(x_train), columns=x_train.columns)
         x_test = pd.DataFrame(scaler.transform(x_test), columns=x_test.columns)
-        x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=42, shuffle=True)
 
         print(f"\nTotal samples {x.shape[0]}")
         print(f"Shape of the train data: {x_train.shape}")
-        print(f"Shape of the validation data: {x_val.shape}")
         print(f"Shape of the test data: {x_test.shape}\n")
 
         # Save the data
         x_train.to_csv(f"{output}/X_train.csv", index=False)
-        x_val.to_csv(f"{output}/X_val.csv", index=False)
         x_test.to_csv(f"{output}/X_test.csv", index=False)
         y_train.to_csv(f"{output}/y_train.csv", index=False)
-        y_val.to_csv(f"{output}/y_val.csv", index=False)
         y_test.to_csv(f"{output}/y_test.csv", index=False)
 
 
-    #def create_model(self):
-    #    return tf.keras.models.Sequential([
-    #        # input layer
-    #        tf.keras.layers.InputLayer(input_shape=(39,)),
-    #        # hidden layers
-    #        tf.keras.layers.Dense(128, activation='relu'),
-    #        tf.keras.layers.Dense(96, activation='relu'),
-    #        tf.keras.layers.Dense(64, activation='relu'),
-    #        tf.keras.layers.Dropout(0.25),
-    #        # output layer
-    #        tf.keras.layers.Dense(2, activation='softmax')
-    #    ])
+    def create_model(self):
+        model= tf.keras.models.Sequential([
+            # input layer
+            tf.keras.layers.InputLayer(input_shape=(39,)),
+            # hidden layers
+            tf.keras.layers.Dense(128, activation='relu'),
+            tf.keras.layers.Dense(96, activation='relu'),
+            tf.keras.layers.Dense(64, activation='relu'),
+            tf.keras.layers.Dropout(0.25),
+            # output layer
+            tf.keras.layers.Dense(2, activation='softmax')
+        ])
+        model.compile(
+                    optimizer=tf.keras.optimizers.Adam(), 
+                    loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+                    metrics=['accuracy']
+                )
+
+        return model

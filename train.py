@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-__author__ = 'Mário Antunes'
+__author__ = 'Rafael Teixeira'
 __version__ = '0.1'
-__email__ = 'mario.antunes@av.it.pt'
+__email__ = 'rafaelgteixeira@av.it.pt'
 __status__ = 'Development'
 
 import os
 import numpy as np
 import argparse
 import pathlib
-import exectime.timeit as timeit
+import exectimeit.timeit as timeit
 
 import joblib
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef
@@ -45,10 +45,12 @@ def fit(cls, X, y, is_sklearn):
     if is_sklearn:
         with joblib.parallel_backend(backend='loky', n_jobs=-1):
             cls.fit(X, y)
+            return cls
     else:
-        callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=0)
-        cls.fit(X, y, epochs=50, verbose=0, callbacks=[callback])
-
+        callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=0)
+        cls = cls()
+        cls.fit(X, y, batch_size=512, epochs=100, verbose=0, callbacks=[callback])
+        return cls
 
 @timeit.exectime(5)
 def predict(cls, X, is_sklearn):
@@ -59,25 +61,39 @@ def predict(cls, X, is_sklearn):
         return cls.predict(X, verbose=0)
 
 
-def optimize(cls_name, parameters, cv = 5):
-    cls = model_mapping[cls_name]()
-    grid = GridSearchCV(cls, param_grid=parameters, scoring='f1_weighted', cv=cv, n_jobs=1)
-    grid.fit(X_train, y_train)
-    cls = model_mapping[cls_name](**grid.best_params_)
-    return cls
+def optimize(cls_name, parameters, cv=5):
+    with joblib.parallel_backend(backend='loky', n_jobs=-1):
+        cls = model_mapping[cls_name]()
+        grid = GridSearchCV(cls, param_grid=parameters, scoring='f1_weighted', cv=cv, n_jobs=-1, refit=best_score)
+        grid.fit(X_train, y_train)
+        cls = model_mapping[cls_name](**grid.best_params_)
+        return cls
 
+def best_score(cv_results_):
+    indices = np.where(cv_results_["mean_test_score"] == np.nanmax(cv_results_["mean_test_score"]))[0]
+    if len(indices) > 1:
+        indices_2 = np.where(cv_results_["mean_fit_time"] == np.nanmin(cv_results_["mean_fit_time"][indices]))[0]
+        indices = list(set(indices_2).intersection(set(indices)))
+        if len(indices) > 1:
+            indices_2 = np.where(cv_results_["mean_score_time"] == np.nanmin(cv_results_["mean_score_time"][indices]))[0]
+            indices = list(set(indices_2).intersection(set(indices)))
+            return indices[0]
+        return indices[0]
+    return indices[0]
 
-def train_models(X_train, y_train, X_test, y_test, model, seed, results_folder):
+def train_models(X_train, y_train, X_test, y_test, model_fn, seed, results_folder):
     results_file = open(results_folder/"results.md", "w")
-    models = [('LOG', {'random_state':[seed], 'penalty': ['l1','l2']}),
-              ('KNN', {'weights': ['uniform', 'distance'], 'n_neighbors': [3,5,7]}),
-              ('SVM', {'random_state':[seed], 'C': [0.1, 1, 10, 100, 1000], 'gamma': [1, 0.1, 0.01, 0.001, 0.0001], 'kernel': ['linear', 'rbf']}),
+    models = [('DNN', {}),
+              ('LOG', {'random_state':[seed], 'penalty': ['l1','l2'], 'C': [0.001, 0.01, 0.1, 1, 10], 
+                       'solver' :['lbfgs', 'liblinear', 'newton-cg', 'newton-cholesky', 'sag', 'saga']}),
+              ('KNN', {'weights': ['uniform', 'distance'], 'n_neighbors': [3,5,7,9], 'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
+                       'leaf_size': [1, 10, 30, 60, 90, 120]}),
+              ('SVM', {'random_state':[seed], 'C': [0.001, 0.01, 0.1, 1], 'kernel': ['linear', 'rbf']}),
               ('NB',  {'var_smoothing': np.logspace(0,-9, num=100)}),
-              ('DT',  {'random_state':[seed], 'criterion':['gini','entropy'],'max_depth':[3,5,7,9], 'max_features': ['auto', 'sqrt', 'log2']}),
-              ('RF',  {'random_state':[seed], 'n_estimators':[200,300,400], 'max_features':['auto', 'sqrt', 'log2'], 'max_depth':[3,5,7,9],}),
-              ('ADC', {'random_state':[seed], 'n_estimators':[200,300,400]}),
-              ('GBC', {'random_state':[seed], 'n_estimators':[200,300,400], 'max_features':['auto', 'sqrt', 'log2'], 'max_depth':[3,5,7,9]}),
-              ('DNN', {})
+              ('DT',  {'random_state':[seed], 'criterion':['gini','entropy'], 'max_depth':[3,5,7,9], 'max_features': ['auto', 'sqrt', 'log2']}),
+              ('RF',  {'random_state':[seed], 'n_estimators':[5, 10, 50, 100], 'max_features':['auto', 'sqrt', 'log2'], 'max_depth':[3,5,7,9]}),
+              ('ABC', {'random_state':[seed], 'n_estimators':[5, 10, 50, 100]}),
+              ('GBC', {'random_state':[seed], 'n_estimators':[5, 10, 50, 100], 'max_features':['auto', 'sqrt', 'log2'], 'max_depth':[3,5,7,9]})
               ]
 
     print(f'| Model name | Train time | Infer time | ACC | F1  | MCC |')
@@ -89,8 +105,8 @@ def train_models(X_train, y_train, X_test, y_test, model, seed, results_folder):
         if is_sklearn:
             cls = optimize(cls_name, parameters)
         else:
-            cls = model
-        mtt, std_tt , _ = fit(cls, X_train, y_train, is_sklearn)
+            cls = model_fn
+        mtt, std_tt , cls = fit(cls, X_train, y_train, is_sklearn)
         mti, std_ti , y_pred = predict(cls, X_test, is_sklearn)
         y_pred = y_pred if is_sklearn else [np.argmax(y) for y in y_pred]
 
@@ -98,33 +114,48 @@ def train_models(X_train, y_train, X_test, y_test, model, seed, results_folder):
         f1 = f1_score(y_test, y_pred, average='weighted')
         mcc = matthews_corrcoef(y_test, y_pred)
         
-        print(f'| {cls_name:<10} | {round(mtt,2):>4}±{round(std_tt,2):<5} | {round(mti,2):<4}±{round(std_tt,2):<5} | {round(acc,2):<3} | {round(f1,2):<3} | {round(mcc,2):<3} |')
+        print(f'| {cls_name:<10} | {round(mtt,4):>6}±{round(std_tt,4):<6} | {round(mti,4):<6}±{round(std_tt,4):<6} | {round(acc,2):<6} | {round(f1,2):<3} | {round(mcc,2):<3} |')
         
-        results_file.write(f'| {cls_name:<10} | {round(mtt,2):>4}±{round(std_tt,2):<5} | {round(mti,2):<4}±{round(std_tt,2):<5} | {round(acc,2):<3} | {round(f1,2):<3} | {round(mcc,2):<3} |\n')
+        results_file.write(f'| {cls_name:<10} | {round(mtt,4):>6}±{round(std_tt,4):<6} | {round(mti,4):<6}±{round(std_tt,4):<6} | {round(acc,2):<3} | {round(f1,2):<3} | {round(mcc,2):<3} |\n')
         if is_sklearn:
             joblib.dump(cls, results_folder/ f'{cls_name}.joblib')
         else:
-            model.save(results_folder/f"dnn_model")
+            cls.save(results_folder/f"dnn_model")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train/test the DNNs.')
-    parser.add_argument("-d", help=f"Dataset name {list(DATASETS.keys())}", default="IOT_DNL")
+    parser.add_argument("-d", help=f"Dataset name {list(DATASETS.keys())}", default=None)
     parser.add_argument('-s', type=int, help='Seed used for data shuffle', default=42)
-    parser.add_argument('-r', type=int, help='Results folder', default='results')
+    parser.add_argument('-r', type=str, help='Results folder', default='results')
     args = parser.parse_args()
 
-    if args.d not in DATASETS.keys():
-        raise ValueError(f"Dataset name must be one of {list(DATASETS.keys())}")
+    if args.d not in DATASETS.keys() and args.d != None:
+        raise ValueError(f"Dataset name must be one of {list(DATASETS.keys())} or None")
     
     tf.keras.utils.set_random_seed(args.s)
-    dataset = DATASETS[args.d]()
+    if args.d == None:
+        for dataset in DATASETS.keys():
+            #if dataset not in ["UNSW", "TON_IOT", "Slicing5G", "NetworkSlicing5G", "NetSlice5G"]:
+            print(f"Running dataset: {dataset}")
+            d = DATASETS[dataset]()
 
-    results = pathlib.Path(args.r)
-    results = results / dataset.name
-    results.mkdir(parents=True, exist_ok=True)
+            results = pathlib.Path(args.r)
+            results = results / d.name
+            results.mkdir(parents=True, exist_ok=True)
 
-    X_train, y_train = dataset.load_training_data()
-    X_test, y_test = dataset.load_test_data()
+            X_train, y_train = d.load_training_data()
+            X_test, y_test = d.load_test_data()
 
-    train_models(X_train, y_train, X_test, y_test, dataset.create_model(), args.s, results)
+            train_models(X_train, y_train, X_test, y_test, d.create_model, args.s, results)
+    else:
+        d = DATASETS[args.d]()
+
+        results = pathlib.Path(args.r)
+        results = results / d.name
+        results.mkdir(parents=True, exist_ok=True)
+
+        X_train, y_train = d.load_training_data()
+        X_test, y_test = d.load_test_data()
+
+        train_models(X_train, y_train, X_test, y_test, d.create_model, args.s, results)
