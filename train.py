@@ -11,6 +11,8 @@ import numpy as np
 import argparse
 import pathlib
 import exectimeit.timeit as timeit
+from sklearn.utils import shuffle
+
 
 import joblib
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef
@@ -61,7 +63,8 @@ def predict(cls, X, is_sklearn):
         return cls.predict(X, verbose=0)
 
 
-def optimize(cls_name, parameters, cv=5):
+def optimize(cls_name, parameters, X_train, y_train, cv=5):
+    print(X_train.shape)
     with joblib.parallel_backend(backend='loky', n_jobs=-1):
         cls = model_mapping[cls_name]()
         grid = GridSearchCV(cls, param_grid=parameters, scoring='f1_weighted', cv=cv, n_jobs=-1, refit=best_score)
@@ -103,9 +106,14 @@ def train_models(X_train, y_train, X_test, y_test, model_fn, seed, results_folde
     for cls_name, parameters in models:
         is_sklearn = cls_name in model_mapping
         if is_sklearn:
-            cls = optimize(cls_name, parameters)
+            if len(X_train) > 50000:
+                x, y = shuffle(X_train, y_train, random_state=42, n_samples=50000)
+            else:
+                x, y = X_train, y_train
+            cls = optimize(cls_name, parameters, x, y)
         else:
             cls = model_fn
+            cls()
         mtt, std_tt , cls = fit(cls, X_train, y_train, is_sklearn)
         mti, std_ti , y_pred = predict(cls, X_test, is_sklearn)
         y_pred = y_pred if is_sklearn else [np.argmax(y) for y in y_pred]
@@ -114,9 +122,9 @@ def train_models(X_train, y_train, X_test, y_test, model_fn, seed, results_folde
         f1 = f1_score(y_test, y_pred, average='weighted')
         mcc = matthews_corrcoef(y_test, y_pred)
         
-        print(f'| {cls_name:<10} | {round(mtt,4):>6}±{round(std_tt,4):<6} | {round(mti,4):<6}±{round(std_tt,4):<6} | {round(acc,2):<6} | {round(f1,2):<3} | {round(mcc,2):<3} |')
+        print(f'| {cls_name:<10} | {round(mtt,4):>6}±{round(std_tt,4):<6} | {round(mti,4):<6}±{round(std_ti,4):<6} | {round(acc,2):<6} | {round(f1,2):<3} | {round(mcc,2):<3} |')
         
-        results_file.write(f'| {cls_name:<10} | {round(mtt,4):>6}±{round(std_tt,4):<6} | {round(mti,4):<6}±{round(std_tt,4):<6} | {round(acc,2):<3} | {round(f1,2):<3} | {round(mcc,2):<3} |\n')
+        results_file.write(f'| {cls_name:<10} | {round(mtt,4):>6}±{round(std_tt,4):<6} | {round(mti,4):<6}±{round(std_ti,4):<6} | {round(acc,2):<3} | {round(f1,2):<3} | {round(mcc,2):<3} |\n')
         if is_sklearn:
             joblib.dump(cls, results_folder/ f'{cls_name}.joblib')
         else:
@@ -136,18 +144,18 @@ if __name__ == "__main__":
     tf.keras.utils.set_random_seed(args.s)
     if args.d == None:
         for dataset in DATASETS.keys():
-            #if dataset not in ["UNSW", "TON_IOT", "Slicing5G", "NetworkSlicing5G", "NetSlice5G"]:
-            print(f"Running dataset: {dataset}")
-            d = DATASETS[dataset]()
+            if dataset not in ["Slicing5G", "NetworkSlicing5G", "NetSlice5G", "UNSW", "IOT_DNL"]:
+                print(f"Running dataset: {dataset}")
+                d = DATASETS[dataset]()
 
-            results = pathlib.Path(args.r)
-            results = results / d.name
-            results.mkdir(parents=True, exist_ok=True)
+                results = pathlib.Path(args.r)
+                results = results / d.name
+                results.mkdir(parents=True, exist_ok=True)
 
-            X_train, y_train = d.load_training_data()
-            X_test, y_test = d.load_test_data()
+                X_train, y_train = d.load_training_data()
+                X_test, y_test = d.load_test_data()
 
-            train_models(X_train, y_train, X_test, y_test, d.create_model, args.s, results)
+                train_models(X_train, y_train, X_test, y_test, d.create_model, args.s, results)
     else:
         d = DATASETS[args.d]()
 
@@ -156,6 +164,7 @@ if __name__ == "__main__":
         results.mkdir(parents=True, exist_ok=True)
 
         X_train, y_train = d.load_training_data()
+
         X_test, y_test = d.load_test_data()
 
         train_models(X_train, y_train, X_test, y_test, d.create_model, args.s, results)

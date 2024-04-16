@@ -3,6 +3,8 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import QuantileTransformer
 import tensorflow as tf
+from sklearn.utils import resample
+
 
 from Util import Util
 
@@ -32,11 +34,13 @@ class TON_IOT(Util):
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42, shuffle=True)
         x_train = pd.DataFrame(scaler.fit_transform(x_train), columns=x_train.columns)
         x_test = pd.DataFrame(scaler.transform(x_test), columns=x_test.columns)
+        x_train, y_train = resample(x_train, y_train, n_samples=x_train.shape[0]//10, random_state=42, stratify=y_train)
+        x_test, y_test = resample(x_test, y_test, n_samples=x_test.shape[0]//2, random_state=42, stratify=y_test)
+
 
         print(f"\nTotal samples {n_samples}")
         print(f"Shape of the train data: {x_train.shape}")
         print(f"Shape of the test data: {x_test.shape}\n")
-
         # Save the data
         x_train.to_csv(f"{output}/X_train.csv", index=False)
         x_test.to_csv(f"{output}/X_test.csv", index=False)
