@@ -72,7 +72,8 @@ class NetworkSlicing5G(Util):
                 # flatten layer
                 tf.keras.layers.Flatten(input_shape=(20,)),
                 # hidden layers
-                tf.keras.layers.Dense(137, activation='leaky_relu'),
+                tf.keras.layers.Dense(169, activation='relu'),
+
                 tf.keras.layers.Dropout(0.2),
 
                 # output layer
@@ -80,7 +81,7 @@ class NetworkSlicing5G(Util):
             ])
         
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=0.13), 
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.0079), 
             loss=tf.keras.losses.SparseCategoricalCrossentropy(),
             metrics=['accuracy']
         )

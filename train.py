@@ -49,9 +49,15 @@ def fit(cls, X, y, is_sklearn):
             cls.fit(X, y)
             return cls
     else:
-        callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=0)
+        early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=10)
+        model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath="temp_model",
+            monitor='accuracy',
+            mode='max',
+            save_best_only=True)
         cls = cls()
-        cls.fit(X, y, batch_size=512, epochs=100, verbose=0, callbacks=[callback])
+        cls.fit(X, y, batch_size=64, epochs=200, verbose=0, callbacks=[early_stop_callback, model_checkpoint_callback])
+        cls = tf.keras.models.load_model("temp")
         return cls
 
 @timeit.exectime(5)

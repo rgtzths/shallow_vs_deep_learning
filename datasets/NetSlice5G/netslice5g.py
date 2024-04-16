@@ -22,7 +22,7 @@ class NetSlice5G(Util):
         Path(output).mkdir(parents=True, exist_ok=True)
 
         x_train = df_train.values[:,:-1]
-        y_train = df_train.values[:,-1]
+        y_train = df_train.values[:,-1] -1
 
         x_train, x_test, y_train, y_test = train_test_split(x_train, y_train, random_state=42, test_size=0.2)
 
@@ -53,19 +53,19 @@ class NetSlice5G(Util):
         return x_test, y_test
     
     def create_model(self):
-        model= tf.keras.models.Sequential([
+        model = tf.keras.models.Sequential([
                 # flatten layer
                 tf.keras.layers.Flatten(input_shape=(16,)),
                 # hidden layers
-                tf.keras.layers.Dense(8, activation='relu'),
-                tf.keras.layers.Dense(4, activation='relu'),
-                tf.keras.layers.Dense(3, activation='tanh'),
+                tf.keras.layers.Dense(73, activation='relu'),
+                tf.keras.layers.Dropout(0.5),
+
                 # output layer
                 tf.keras.layers.Dense(3, activation="softmax")
             ])
 
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(), 
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.25), 
             loss=tf.keras.losses.SparseCategoricalCrossentropy(),
             metrics=['accuracy']
         )
