@@ -8,7 +8,7 @@ results_dir =  pathlib.Path("results")
 
 slicing_datasets = ["Slicing5G", "NetworkSlicing5G", "NetSlice5G"]
 ids_datasets = ["UNSW", "IOT_DNL"]#,  "TON_IOT"]
-models = ["DNN", "LOG", "KNN", "SVM", "NB", "DT", "RF", "ABC", "GBC"]
+models = [("DNN", "DNN"), ("LOG", "LR"), ("KNN", "k-NN"), ("SVM", "SVM"), ("NB", "GaussianNB"), ("DT","DT") , ("RF", "RF"), ("ABC", "AdaBoost"), ("GBC", "Gradient Boosting")]
 
 extracted_data = {}
 
@@ -25,71 +25,74 @@ for folder in results_dir.glob("*"):
                 model_name, train_time, infer_time, acc, f1, mcc = re.split(r'\|', line.strip())[1:-1]
                 # Remove extra spaces and potential ± signs
                 metrics = [float(metric.strip().split('±')[0]) 
-                           for metric in [train_time, infer_time, acc, f1, mcc]]
+                           for metric in [train_time, infer_time]] + [float(metric) for metric in [acc, f1, mcc]]
+                           
                 # Add one for models with perfect score (due to ± sign removal)
-                metrics.extend([1] * (3 - len([m for m in metrics if m < 1])))
+                #metrics.extend([1] * (3 - len([m for m in metrics if m < 1])))
+
                 extracted_data[str(folder).split("/")[1]][model_name.strip()] = metrics
 
 print("Slicing accuracy")
-for model in models:
-    text = f"{model}"
+for model, name in models:
+    text = f"{name}"
     for dataset in slicing_datasets:
-        text += f" & {extracted_data[dataset][model][-1]}"
+        text += f" & {extracted_data[dataset][model][-1]:.2f}"
     text += "\\\\"
     print(text)
 
 print("IDS accuracy")
-for model in models:
-    text = f"{model}"
+for model, name in models:
+    text = f"{name}"
     for dataset in ids_datasets:
-        text += f" & {extracted_data[dataset][model][-1]}"
+        #print(extracted_data[dataset][model][-1])
+        text += f" & {extracted_data[dataset][model][-1]:.2f}"
     text += "\\\\"
     print(text)
 
 print("Slicing training")
-for model in models:
-    text = f"{model}"
+for model, name in models:
+    text = f"{name}"
     for dataset in slicing_datasets:
         if model == "DNN":
             text += f" & {extracted_data[dataset][model][0]}(-)"
         else:
             acc = (1- extracted_data[dataset][model][0]/ extracted_data[dataset]["DNN"][0])*100
-            text += f" & {extracted_data[dataset][model][0]}({acc:.2f}\\%)"
+            text += f" & {extracted_data[dataset][model][0]}({acc:.0f}\\%)"
     text += "\\\\"
     print(text)
 
 print("Slicing prediction")
-for model in models:
-    text = f"{model}"
+for model, name in models:
+    text = f"{name}"
     for dataset in slicing_datasets:
         if model == "DNN":
             text += f" & {extracted_data[dataset][model][1]}(-)"
         else:
             acc = (1- extracted_data[dataset][model][1]/ extracted_data[dataset]["DNN"][1])*100
-            text += f" & {extracted_data[dataset][model][1]}({acc:.2f}\\%)"
+            text += f" & {extracted_data[dataset][model][1]}({acc:.0f}\\%)"
     text += "\\\\"
     print(text)
 
 print("ids training")
-for model in models:
-    text = f"{model}"
+for model, name in models:
+    text = f"{name}"
     for dataset in ids_datasets:
         if model == "DNN":
             text += f" & {extracted_data[dataset][model][0]}(-)"
         else:
             acc = (1- extracted_data[dataset][model][0]/ extracted_data[dataset]["DNN"][0])*100
-            text += f" & {extracted_data[dataset][model][0]}({acc:.2f}\\%)"
+            text += f" & {extracted_data[dataset][model][0]}({acc:.0f}\\%)"
     text += "\\\\"
     print(text)
 
 print("ids prediction")
-for model in models:
-    text = f"{model}"
+for model, name in models:
+    text = f"{name}"
     for dataset in ids_datasets:
         if model == "DNN":
             text += f" & {extracted_data[dataset][model][1]}(-)"
         else:
             acc = (1- extracted_data[dataset][model][1]/ extracted_data[dataset]["DNN"][1])*100
-            text += f" & {extracted_data[dataset][model][1]}({acc:.2f}\\%)"
+            text += f" & {extracted_data[dataset][model][1]}({acc:.0f}\\%)"
     text += "\\\\"
     print(text)

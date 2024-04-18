@@ -65,7 +65,7 @@ class NetSlice5G(Util):
             ])
 
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=0.25), 
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.01), 
             loss=tf.keras.losses.SparseCategoricalCrossentropy(),
             metrics=['accuracy']
         )
