@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 tf.keras.utils.set_random_seed(42)
-
+import time
 d = DATASETS["NetworkSlicing5G"]()
 
 X_train, y_train = d.load_training_data()
@@ -22,7 +22,10 @@ model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     save_best_only=True)
 
 cls = d.create_model()
-history = cls.fit(x_train, y_train, batch_size=8192, epochs=200, verbose=2, callbacks=[callback, model_checkpoint_callback])
+start = time.time()
+history = cls.fit(x_train, y_train, batch_size=8192, epochs=200, verbose=0, callbacks=[callback, model_checkpoint_callback])
+end = time.time()-start
+print(f"Training time: {end}")
 cls = tf.keras.models.load_model("temp")
 y_pred = cls.predict(X_test, verbose=0)
 
