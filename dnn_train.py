@@ -22,7 +22,7 @@ model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     save_best_only=True)
 
 cls = d.create_model()
-history = cls.fit(x_train, y_train, batch_size=64, epochs=200, verbose=0, callbacks=[callback, model_checkpoint_callback])
+history = cls.fit(x_train, y_train, batch_size=8192, epochs=200, verbose=2, callbacks=[callback, model_checkpoint_callback])
 cls = tf.keras.models.load_model("temp")
 y_pred = cls.predict(X_test, verbose=0)
 

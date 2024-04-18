@@ -31,7 +31,6 @@ os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
 
 from config import DATASETS
 
-
 model_mapping ={'LOG': LogisticRegression,
                 'KNN': KNeighborsClassifier,
                 'SVM': SVC,
@@ -41,41 +40,35 @@ model_mapping ={'LOG': LogisticRegression,
                 'ABC': AdaBoostClassifier,
                 'GBC': GradientBoostingClassifier}
 
-
 @timeit.exectime(5)
-def fit(cls, X, y, is_sklearn):
-    if is_sklearn:
-        with joblib.parallel_backend(backend='loky', n_jobs=-1):
-            cls.fit(X, y)
-            return cls
-    else:
-        early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=10)
-        model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            filepath="temp_model",
-            monitor='accuracy',
-            mode='max',
-            save_best_only=True)
-        cls = cls()
-        cls.fit(X, y, batch_size=64, epochs=200, verbose=0, callbacks=[early_stop_callback, model_checkpoint_callback])
-        cls = tf.keras.models.load_model("temp")
+def fit(cls, X, y):
+    with joblib.parallel_backend(backend='loky', n_jobs=-1):
+        cls.fit(X, y)
         return cls
 
 @timeit.exectime(5)
-def predict(cls, X, is_sklearn):
-    if is_sklearn:
-        with joblib.parallel_backend(backend='loky', n_jobs=-1):
-            return cls.predict(X)
-    else:
-        return cls.predict(X, verbose=0)
+def predict(cls, X):
+    with joblib.parallel_backend(backend='loky', n_jobs=-1):
+        return cls.predict(X)
 
 
-def optimize(cls_name, parameters, X_train, y_train, cv=5):
-    print(X_train.shape)
+@timeit.exectime(5)
+def fit_keras(cls, train_dataset, early_stop, model_checkpoint):
+    cls = cls()
+    cls.fit(train_dataset, epochs=200, verbose=0, callbacks=[early_stop, model_checkpoint])
+    return cls
+
+@timeit.exectime(5)
+def predict_keras(cls, test_dataset):
+    return cls.predict(test_dataset, verbose=0)
+
+def optimize(cls_name, parameters, X_train, y_train, results_path, cv=5):
     with joblib.parallel_backend(backend='loky', n_jobs=-1):
         cls = model_mapping[cls_name]()
         grid = GridSearchCV(cls, param_grid=parameters, scoring='f1_weighted', cv=cv, n_jobs=-1, refit=best_score)
         grid.fit(X_train, y_train)
         cls = model_mapping[cls_name](**grid.best_params_)
+        joblib.dump(grid, results_path)
         return cls
 
 def best_score(cv_results_):
@@ -116,13 +109,25 @@ def train_models(X_train, y_train, X_test, y_test, model_fn, seed, results_folde
                 x, y = shuffle(X_train, y_train, random_state=42, n_samples=50000)
             else:
                 x, y = X_train, y_train
-            cls = optimize(cls_name, parameters, x, y)
+            cls = optimize(cls_name, parameters, x, y, str(results_folder / f"{cls_name}.pkl"))
+            mtt, std_tt , cls = fit(cls, X_train, y_train)
+            mti, std_ti , y_pred = predict(cls, X_test)
         else:
+
             cls = model_fn
             cls()
-        mtt, std_tt , cls = fit(cls, X_train, y_train, is_sklearn)
-        mti, std_ti , y_pred = predict(cls, X_test, is_sklearn)
-        y_pred = y_pred if is_sklearn else [np.argmax(y) for y in y_pred]
+            early_stop_callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=10)
+            model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+                filepath=str(results_folder/"temp_model"),
+                monitor='accuracy',
+                mode='max',
+                save_best_only=True)
+            train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train)).batch(8192)
+            test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test)).batch(8192)
+            mtt, std_tt , cls = fit_keras(cls, train_dataset, early_stop_callback, model_checkpoint_callback)
+            cls = tf.keras.models.load_model(str(results_folder/"temp_model"))
+            mti, std_ti , y_pred = predict_keras(cls, test_dataset)
+            y_pred = [np.argmax(y) for y in y_pred]
 
         acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, average='weighted')
@@ -150,18 +155,17 @@ if __name__ == "__main__":
     tf.keras.utils.set_random_seed(args.s)
     if args.d == None:
         for dataset in DATASETS.keys():
-            if dataset not in ["Slicing5G", "NetworkSlicing5G", "NetSlice5G", "UNSW", "IOT_DNL"]:
-                print(f"Running dataset: {dataset}")
-                d = DATASETS[dataset]()
+            print(f"Running dataset: {dataset}")
+            d = DATASETS[dataset]()
 
-                results = pathlib.Path(args.r)
-                results = results / d.name
-                results.mkdir(parents=True, exist_ok=True)
+            results = pathlib.Path(args.r)
+            results = results / d.name
+            results.mkdir(parents=True, exist_ok=True)
 
-                X_train, y_train = d.load_training_data()
-                X_test, y_test = d.load_test_data()
+            X_train, y_train = d.load_training_data()
+            X_test, y_test = d.load_test_data()
 
-                train_models(X_train, y_train, X_test, y_test, d.create_model, args.s, results)
+            train_models(X_train, y_train, X_test, y_test, d.create_model, args.s, results)
     else:
         d = DATASETS[args.d]()
 
